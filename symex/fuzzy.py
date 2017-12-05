@@ -189,6 +189,13 @@ class sym_minus(sym_binop):
 
 ## Exercise 2: your code here.
 ## Implement AST nodes for division and multiplication.
+class sym_multiply(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) * z3expr(self.b, printable)
+ 
+class sym_divide(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) / z3expr(self.b, printable)
 
 ## String operations
 
@@ -482,7 +489,14 @@ class concolic_int(int):
 
   ## Exercise 2: your code here.
   ## Implement symbolic division and multiplication.
+  def __mul__(self, o):
+    res = self.__v * o
+    return concolic_int(sym_multiply(ast(self), ast(o)), res)
 
+  def __div__(self, o):
+    res = self.__v / o
+    return concolic_int(sym_divide(ast(self), ast(o)), res)
+			
   def _sym_ast(self):
     return self.__sym
 
@@ -522,6 +536,13 @@ class concolic_str(str):
   ## Exercise 4: your code here.
   ## Implement symbolic versions of string length (override __len__)
   ## and contains (override __contains__).
+  def __len__(self):
+    res = len(self.__v)
+    return concolic_int(sym_length(ast(self)), res)
+
+  def __contains__(self, o):
+    res = (self.__v).find(o) != -1
+    return concolic_bool(sym_contains(ast(self), ast(o)), res)
 
   def startswith(self, o):
     res = self.__v.startswith(o)
@@ -672,12 +693,20 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
       testfunc()
     except RequireMismatch:
       pass
-
+    
     if verbose > 1:
       print 'Test generated', len(cur_path_constr), 'branches:'
       for (c, caller) in zip(cur_path_constr, cur_path_constr_callers):
         print indent(z3expr(c, True)), '@', '%s:%d' % (caller[0], caller[1])
+        
+        (ok, model) = fork_and_check(sym_not(c))
+        if(c not in checked):
+          checked.add(c)
 
+          if(ok == z3.sat):
+            inputs.add(model, caller)
+        else:
+          pass
     ## for each branch, invoke Z3 to find an input that would go
     ## the other way, and add it to the list of inputs to explore.
 
